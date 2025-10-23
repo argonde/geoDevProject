@@ -5,27 +5,31 @@ services:
     image: postgis/postgis:15-3.3
     container_name: postgis
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-
+      POSTGRES_USER: ${POSTGRES_USER:-gisuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gispwd}
+      POSTGRES_DB: ${POSTGRES_DB:-gisdb}
     ports:
       - "5432:5432"
     volumes:
       - postgis_data:/var/lib/postgresql/data
+    networks:
+      - gisnet
 
   qgis-server:
     image: kartoza/qgis-server:latest
     container_name: qgis-server
-    ports:
-      - "8080:80"
     depends_on:
       - postgis
     environment:
       QGIS_SERVER_LOG_LEVEL: 0
       QGIS_SERVER_LOG_FILE: /var/log/qgis/qgisserver.log
+      QGIS_PROJECT_FILE: /data/project.qgz
+    ports:
+      - "8080:80"
     volumes:
       - ./data:/data
+    networks:
+      - gisnet
 
   leaflet:
     image: nginx
@@ -34,6 +38,23 @@ services:
       - ./leaflet:/usr/share/nginx/html
     ports:
       - "8081:80"
+    networks:
+      - gisnet
+
+  data-loader:
+    image: ghcr.io/osgeo/gdal:ubuntu-small-latest
+    container_name: data-loader
+    depends_on:
+      - postgis
+    volumes:
+      - ./data/shp:/data/shp
+      - ./init-data.sh:/init-data.sh
+    entrypoint: ["/bin/sh", "-c", "/init-data.sh"]
+    networks:
+      - gisnet
 
 volumes:
   postgis_data:
+
+networks:
+  gisnet:
